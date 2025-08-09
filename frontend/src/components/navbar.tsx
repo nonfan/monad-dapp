@@ -1,8 +1,8 @@
 import { Link } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
-import { WalletButton } from '@/components/wallet-button'
 import { Coins, TrendingUp, Layers, PiggyBank, Palette, Building2, Search } from 'lucide-react'
 import Logo from "@/components/logo.tsx";
+import {ConnectKitButton} from "connectkit";
 
 export function Navbar() {
   return (
@@ -61,7 +61,7 @@ export function Navbar() {
           </div>
 
           <div className="flex items-center space-x-4">
-            <WalletButton />
+            <ConnectKitButton/>
           </div>
         </div>
       </div>

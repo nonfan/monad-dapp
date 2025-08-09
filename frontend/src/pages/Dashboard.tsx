@@ -1,7 +1,16 @@
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
+import {Card, CardContent, CardDescription, CardHeader, CardTitle} from '@/components/ui/card'
+import {Button} from '@/components/ui/button'
+import {useAccount, useBalance} from "wagmi";
+import {formatEther} from "viem";
+import {Loader} from 'lucide-react';
 
 export function Dashboard() {
+  const {address} = useAccount()
+  const {data, isLoading} = useBalance({
+    address,
+    unit: 'ether',
+  })
+
   return (
     <main className="container mx-auto px-4 py-8">
       <div className="space-y-8">
@@ -20,7 +29,11 @@ export function Dashboard() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">0.0 MON</div>
+              <div className="text-2xl font-bold">
+                {isLoading
+                  ? <Loader className="animate-spin"/>
+                  : `${data ? Number(formatEther(data!.value)).toFixed(2) : '0'} ${data?.symbol ?? 'MON'}`}
+              </div>
               <p className="text-xs text-muted-foreground">
                 $0.00 USD
               </p>

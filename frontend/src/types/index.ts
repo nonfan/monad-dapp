@@ -45,7 +45,7 @@ export interface Transaction {
   amount?: string
   to?: string
   from?: string
-  timestamp: number
+  timestamp: bigint
   status: 'pending' | 'confirmed' | 'failed'
 }
 

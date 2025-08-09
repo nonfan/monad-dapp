@@ -1,212 +1,281 @@
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Search, Hash, Clock, Users, Activity, ExternalLink } from 'lucide-react'
+import {Card, CardContent, CardHeader, CardTitle} from '@/components/ui/card'
+import {Button} from '@/components/ui/button'
+import {Input} from '@/components/ui/input'
+import {Label} from '@/components/ui/label'
+import {Activity, File, Hash, Search, Users} from 'lucide-react'
+import {useBlockNumber, usePublicClient} from 'wagmi'
+import React, {useEffect, useState} from 'react'
+import {Transaction} from "@/types";
+
+type BlockRow = {
+  number: bigint
+  hash: `0x${string}`
+  txns: number
+  timestamp?: bigint
+}
+
+const short = (s?: string, left = 6, right = 4) =>
+  !s ? '-' : `${s.slice(0, left)}...${s.slice(-right)}`
+const timeAgo = (ts?: bigint) => {
+  if (!ts) return '--'
+  const diff = Math.max(0, Math.floor(Date.now() / 1000 - Number(ts)))
+  return `${diff} secs ago`
+}
 
 export function Explorer() {
-  return (
-    <main className="container mx-auto px-4 py-8">
-      <div className="space-y-8">
-        <div className="text-center space-y-4">
-          <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-teal-600 bg-clip-text text-transparent">
-            区块浏览器
-          </h1>
-          <p className="text-lg text-gray-600 max-w-2xl mx-auto">
-            探索 Monad 网络上的区块、交易和地址信息
-          </p>
-        </div>
+  const {data: latestBlock} = useBlockNumber({watch: true})
+  const publicClient = usePublicClient()
+  const [blocks, setBlocks] = useState<BlockRow[]>([]);
+  const [txs, setTxs] = useState<Transaction[]>([])
 
-        {/* 搜索框 */}
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex space-x-4">
-              <div className="flex-1">
-                <Label htmlFor="search" className="sr-only">搜索</Label>
-                <Input
-                  id="search"
-                  placeholder="输入交易哈希、区块号、或地址..."
-                  className="text-lg h-12"
-                />
-              </div>
-              <Button className="h-12 px-8 bg-gradient-to-r from-blue-600 to-teal-600">
-                <Search className="w-5 h-5 mr-2" />
-                搜索
+  const TopItems: TopCardProps[] = [
+    {
+      icon: Activity, title: "Total Txn", main: "2,448,079,142", items: [
+        {value1: "TPS", value2: "24H Peak TPS"},
+        {value1: "266", value2: "1,560"},
+        {value1: "Total Accounts", value2: "24H New Accounts"},
+        {value1: "308,295,757", value2: "33,565"},
+      ]
+    },
+    {
+      icon: Hash, title: "Current Block", main: "#29,983,970", items: [
+        {value1: "Avg Block Time", value2: ""},
+        {value1: "0.5 secs", value2: ""},
+        {value1: "Transactions", value2: "AVG Gas per Txn"},
+        {value1: "52", value2: "0.025049"},
+      ]
+    },
+    {
+      icon: File, title: "Total Contracts", main: "33,943,867", items: [
+        {value1: "24H New Contracts", value2: ""},
+        {value1: "107,493", value2: ""},
+        {value1: "Total Tokens", value2: "24H New Tokens"},
+        {value1: "3,843,104", value2: "16,038"},
+      ]
+    },
+    {
+      icon: Users, title: "Total Validators", main: "99", items: [
+        {value1: "Total Stake MON", value2: ""},
+        {value1: "1,980", value2: ""},
+        {value1: "Total Supply", value2: "Burnt MON"},
+        {value1: "10B", value2: "17.7M"},
+      ]
+    }
+  ]
+
+  useEffect(() => {
+    if (!latestBlock || !publicClient) return
+    const run = async () => {
+      const nums = Array.from({length: 7}, (_, i) => latestBlock - BigInt(i))
+      const list = await Promise.all(
+        nums.map(async (n) => {
+          const b = await publicClient.getBlock({blockNumber: n, includeTransactions: true})
+
+          // 只在最新区块时更新交易列表
+          if (n === latestBlock) {
+            const rows: Transaction[] = (b.transactions as any[]).slice(0, 7).map(item => ({
+              ...item,
+              timestamp: b.timestamp
+            }))
+            setTxs(rows)
+          }
+
+          return {
+            number: n,
+            hash: b.hash!,
+            txns: Array.isArray(b.transactions) ? b.transactions.length : (b.transactions as any[]).length,
+            timestamp: b.timestamp,
+          } as BlockRow
+        }),
+      )
+      setBlocks(list)
+    }
+
+    run()
+  }, [latestBlock, publicClient])
+
+
+  return (
+    <main className="mx-auto max-w-[1400px] px-4 py-8">
+      {/* Hero */}
+      <section className="relative overflow-hidden rounded-3xl pb-10">
+        <h1 className="mb-6 text-center text-4xl font-semibold tracking-tight text-gray-900">
+          Explore Monad Blockchain
+        </h1>
+
+        {/* 搜索条 */}
+        <div
+          className="mx-auto flex w-full max-w-3xl items-center gap-3 rounded-full bg-white/90 p-2 pl-6 shadow-lg ring-1 ring-black/5 backdrop-blur">
+          <Label htmlFor="search" className="sr-only">Search</Label>
+          <Input
+            id="search"
+            placeholder="Search by Address, Transaction, Block, Token, NFT"
+            className="h-12 flex-1 border-0 bg-transparent text-base focus-visible:ring-0"
+          />
+          <div className="hidden items-center gap-2 pr-1 md:flex">
+            <kbd className="rounded-md border bg-gray-50 px-2 py-1 text-xs text-gray-600">/</kbd>
+            <Button className="h-12 rounded-full bg-indigo-500 px-6 hover:bg-indigo-600">
+              <Search className="mr-2 h-5 w-5"/>
+              Search
+            </Button>
+          </div>
+        </div>
+      </section>
+
+      {/* 顶部统计卡 */}
+      <section className="grid gap-5 md:grid-cols-2 lg:grid-cols-4">
+        {
+          TopItems.map(item => <TopCard {...item}/>)
+        }
+      </section>
+
+      {/* Latest Blocks / Latest Transactions */}
+      <section className="mt-8 grid gap-6 lg:grid-cols-2">
+        {/* Latest Blocks */}
+        <Card className="rounded-3xl shadow-sm">
+          <CardHeader className="rounded-t-3xl bg-indigo-50/80 py-4">
+            <CardTitle className="text-base font-semibold text-gray-800">Latest Blocks</CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            <ul className="divide-y">
+              {blocks.map((b) => (
+                <li key={b.hash} className="flex items-start justify-between px-5 py-4 hover:bg-gray-50">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gray-100">
+                      <Hash className="h-4 w-4 text-gray-500"/>
+                    </div>
+                    <div className="flex flex-col">
+                      <a className="text-sm font-semibold text-indigo-600 hover:underline"
+                         target="_blank" href={`https://testnet.monadexplorer.com/block/${b.number.toString()}`}>
+                        #{b.number.toString()}
+                      </a>
+                      <span className="text-xs text-gray-500">{timeAgo(b.timestamp)}</span>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-sm text-gray-700">
+                      Hash{' '}
+                      <a className="text-indigo-600 hover:underline" target="_blank"
+                         href={`https://testnet.monadexplorer.com/block/${b.number.toString()}`}>
+                        {short(b.hash)}
+                      </a>
+                    </div>
+                    <div className="text-xs text-gray-500">{b.txns} txns</div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+
+            <div className="px-5 pb-4 pt-3">
+              <Button variant="outline" className="w-full rounded-xl">
+                View All Blocks
               </Button>
             </div>
           </CardContent>
         </Card>
 
-        {/* 网络统计 */}
-        <div className="grid md:grid-cols-4 gap-6">
-          <Card className="bg-gradient-to-br from-blue-50 to-teal-50 border-blue-200">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">最新区块</CardTitle>
-              <Hash className="h-4 w-4 text-blue-600" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-blue-700">2,847,563</div>
-              <p className="text-xs text-blue-600 mt-1">2 秒前</p>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-gradient-to-br from-green-50 to-emerald-50 border-green-200">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">TPS</CardTitle>
-              <Activity className="h-4 w-4 text-green-600" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-green-700">3,247</div>
-              <p className="text-xs text-green-600 mt-1">每秒交易数</p>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-gradient-to-br from-purple-50 to-indigo-50 border-purple-200">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Gas 价格</CardTitle>
-              <Clock className="h-4 w-4 text-purple-600" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-purple-700">0.001</div>
-              <p className="text-xs text-purple-600 mt-1">MON</p>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-gradient-to-br from-orange-50 to-red-50 border-orange-200">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">活跃地址</CardTitle>
-              <Users className="h-4 w-4 text-orange-600" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-orange-700">47,362</div>
-              <p className="text-xs text-orange-600 mt-1">24h 活跃</p>
-            </CardContent>
-          </Card>
-        </div>
-
-        <div className="grid lg:grid-cols-2 gap-8">
-          {/* 最新区块 */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center space-x-2">
-                <Hash className="w-5 h-5 text-blue-600" />
-                <span>最新区块</span>
-              </CardTitle>
-              <CardDescription>
-                Monad 网络上最新产生的区块
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                {[
-                  { number: 2847563, hash: '0x1a2b3c...4d5e6f', txs: 247, time: '2 秒前', size: '45.2 KB' },
-                  { number: 2847562, hash: '0x2b3c4d...5e6f7a', txs: 189, time: '4 秒前', size: '38.7 KB' },
-                  { number: 2847561, hash: '0x3c4d5e...6f7a8b', txs: 201, time: '6 秒前', size: '41.3 KB' },
-                  { number: 2847560, hash: '0x4d5e6f...7a8b9c', txs: 167, time: '8 秒前', size: '35.9 KB' },
-                  { number: 2847559, hash: '0x5e6f7a...8b9c0d', txs: 223, time: '10 秒前', size: '47.1 KB' },
-                ].map((block, index) => (
-                  <div key={index} className="flex items-center justify-between p-3 border rounded-lg hover:bg-gray-50">
-                    <div className="flex items-center space-x-4">
-                      <div className="w-8 h-8 bg-blue-100 rounded flex items-center justify-center">
-                        <Hash className="w-4 h-4 text-blue-600" />
-                      </div>
-                      <div>
-                        <div className="font-semibold">{block.number}</div>
-                        <div className="text-sm text-gray-500 font-mono">{block.hash}</div>
-                      </div>
-                    </div>
-                    <div className="text-right text-sm">
-                      <div>{block.txs} 笔交易</div>
-                      <div className="text-gray-500">{block.time}</div>
-                    </div>
-                    <ExternalLink className="w-4 h-4 text-gray-400" />
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* 最新交易 */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center space-x-2">
-                <Activity className="w-5 h-5 text-green-600" />
-                <span>最新交易</span>
-              </CardTitle>
-              <CardDescription>
-                网络上最新确认的交易
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                {[
-                  { hash: '0xa1b2c3...d4e5f6', from: '0x1234...5678', to: '0x9876...5432', value: '125.5 MON', time: '1 秒前' },
-                  { hash: '0xb2c3d4...e5f6a7', from: '0x2345...6789', to: '0x8765...4321', value: '67.8 MON', time: '3 秒前' },
-                  { hash: '0xc3d4e5...f6a7b8', from: '0x3456...7890', to: '0x7654...3210', value: '234.2 MON', time: '5 秒前' },
-                  { hash: '0xd4e5f6...a7b8c9', from: '0x4567...8901', to: '0x6543...2109', value: '89.1 MON', time: '7 秒前' },
-                  { hash: '0xe5f6a7...b8c9d0', from: '0x5678...9012', to: '0x5432...1098', value: '156.7 MON', time: '9 秒前' },
-                ].map((tx, index) => (
-                  <div key={index} className="flex items-center justify-between p-3 border rounded-lg hover:bg-gray-50">
-                    <div className="flex items-center space-x-4">
-                      <div className="w-8 h-8 bg-green-100 rounded flex items-center justify-center">
-                        <Activity className="w-4 h-4 text-green-600" />
-                      </div>
-                      <div>
-                        <div className="font-mono text-sm font-semibold">{tx.hash}</div>
-                        <div className="text-xs text-gray-500">
-                          {tx.from} → {tx.to}
-                        </div>
-                      </div>
-                    </div>
-                    <div className="text-right text-sm">
-                      <div className="font-semibold">{tx.value}</div>
-                      <div className="text-gray-500">{tx.time}</div>
-                    </div>
-                    <ExternalLink className="w-4 h-4 text-gray-400" />
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* 网络健康状态 */}
-        <Card>
-          <CardHeader>
-            <CardTitle>网络健康状态</CardTitle>
-            <CardDescription>
-              实时监控 Monad 网络的运行状态
-            </CardDescription>
+        {/* Latest Transactions（先放占位结构，等你接数据再替换） */}
+        <Card className="rounded-3xl shadow-sm">
+          <CardHeader className="rounded-t-3xl bg-indigo-50/80 py-4">
+            <CardTitle className="text-base font-semibold text-gray-800">Latest Transactions</CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="grid md:grid-cols-3 gap-6">
-              <div className="text-center p-4 bg-green-50 rounded-lg">
-                <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-2">
-                  <Activity className="w-6 h-6 text-green-600" />
-                </div>
-                <div className="text-lg font-bold text-green-700">正常</div>
-                <div className="text-sm text-green-600">网络运行正常</div>
-              </div>
-              
-              <div className="text-center p-4 bg-blue-50 rounded-lg">
-                <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-2">
-                  <Clock className="w-6 h-6 text-blue-600" />
-                </div>
-                <div className="text-lg font-bold text-blue-700">2.1 秒</div>
-                <div className="text-sm text-blue-600">平均出块时间</div>
-              </div>
-              
-              <div className="text-center p-4 bg-purple-50 rounded-lg">
-                <div className="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-2">
-                  <Users className="w-6 h-6 text-purple-600" />
-                </div>
-                <div className="text-lg font-bold text-purple-700">128</div>
-                <div className="text-sm text-purple-600">活跃验证节点</div>
-              </div>
+          <CardContent className="p-0">
+            <ul className="divide-y">
+              {txs.map((tx, i) => (
+                <li key={i} className="flex items-start justify-between px-5 py-4 hover:bg-gray-50">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gray-100">
+                      <Activity className="h-4 w-4 text-gray-500"/>
+                    </div>
+                    <div className="flex flex-col">
+                      <a className="font-mono text-sm font-semibold text-indigo-600 hover:underline" target="_blank"
+                         href={`https://testnet.monadexplorer.com/tx/${tx.hash}`}>
+                        {short(tx.hash)}
+                      </a>
+                      <span className="text-xs text-gray-500">{timeAgo(tx.timestamp)}</span>
+                    </div>
+                  </div>
+                  <div className="text-right text-xs text-gray-600">
+                    <div>
+                      From <a className="text-indigo-600 hover:underline" href="#">
+                      {short(tx.from)}
+                    </a>
+                    </div>
+                    <div>
+                      To <a className="text-indigo-600 hover:underline" href="#">
+                      {short(tx.to)}
+                    </a>
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+
+            <div className="px-5 pb-4 pt-3">
+              <Button variant="outline" className="w-full rounded-xl">
+                View All Transactions
+              </Button>
             </div>
           </CardContent>
         </Card>
-      </div>
+      </section>
     </main>
+  )
+}
+
+type TopCardItem = {
+  value1: string | number,
+  value2: string | number,
+}
+
+interface TopCardProps {
+  icon: React.ComponentType<{ className?: string }>
+  title: string
+  main: React.ReactNode
+  items: TopCardItem[]
+}
+
+export function TopCard({icon: Icon, title, main, items}: TopCardProps) {
+  return (
+    <Card className="rounded-[22px] border border-[#e2e7ee]">
+      <div className="flex items-start gap-3 p-5">
+        {/* 圆底图标 */}
+        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gray-100">
+          <Icon className="h-5 w-5 text-gray-600"/>
+        </div>
+
+        {/* 文案区 */}
+        <div className="flex-1">
+          <div className="text-sm text-gray-600">{title}</div>
+          {main && (
+            <div className="mt-1 text-2xl font-semibold tracking-tight text-gray-900">
+              {main}
+            </div>
+          )}
+        </div>
+      </div>
+      {/* 分组渲染：每 2 行后加一条虚线，效果与截图一致 */}
+      <div className="m-1 bg-[#fbfaf9] p-5 rounded-2xl">
+        <div className="text-sm text-gray-600">
+          {items.map((it, idx) => (
+            <React.Fragment key={idx}>
+              <div className="flex justify-between items-center">
+                <div className={`mt-1 ${idx % 2 > 0 ? '' : ' font-semibold text-gray-900'}`}>
+                  {it.value1 ?? '—'}
+                </div>
+                <div
+                  className={`text-right ${idx % 2 > 0 ? '' : ' font-semibold text-gray-900'}`}>
+                  {it.value2 ?? '—'}
+                </div>
+              </div>
+              {/* 每两项后插入虚线分割（且不是最后一组） */}
+              {(idx % 2 === 1) && idx < items.length - 1 && (
+                <div className="col-span-2 my-1 border-t border-dashed border-gray-300/80"/>
+              )}
+            </React.Fragment>
+          ))}
+        </div>
+      </div>
+    </Card>
   )
 }
